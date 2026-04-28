@@ -22,8 +22,33 @@ export class InsufficientBalanceError extends Error {
   }
 }
 
+const CONTRACT_ERRORS: Record<number, string> = {
+  1: "Contract is not initialized.",
+  2: "Goal must be greater than zero.",
+  3: "Deadline must be in the future.",
+  4: "Amount must be greater than zero.",
+  5: "Campaign not found.",
+  6: "This campaign is closed.",
+  7: "Deadline has not been reached yet.",
+  8: "Goal was not met.",
+  9: "Goal already met.",
+  10: "Already claimed.",
+  11: "No pledge found for this address.",
+  12: "Title is required.",
+  13: "Pledge exceeds the remaining goal.",
+};
+
+export function decodeContractError(message: string): string | null {
+  const m = message.match(/Error\(Contract,\s*#(\d+)\)/i);
+  if (!m) return null;
+  const code = Number(m[1]);
+  return CONTRACT_ERRORS[code] ?? `Contract error #${code}.`;
+}
+
 export function toError(e: unknown): Error {
   if (e instanceof Error) {
+    const contractMsg = decodeContractError(e.message);
+    if (contractMsg) return new Error(contractMsg);
     const msg = e.message.toLowerCase();
     if (
       msg.includes("rejected") ||
