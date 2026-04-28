@@ -2,19 +2,27 @@
 
 Crowdfund: factory + escrow + soulbound supporter badge on Stellar testnet.
 
+Goal-based crowdfunding dApp. Backers pledge XLM into a Soroban escrow contract. After the deadline, the beneficiary claims the pot if the goal closed; otherwise every backer can pull their pledge back. Each pledge mints a soulbound SEP-41 supporter badge through an inter-contract call. Live event feed is polled from Soroban RPC.
+
+[![CI](https://github.com/BobbyHello/Crowdfund/actions/workflows/ci.yml/badge.svg)](https://github.com/BobbyHello/Crowdfund/actions/workflows/ci.yml)
+
+- Live: `<Vercel URL>`
+- Demo video: `<Loom URL>`
+- Main contract: [`CDSM73AL…GDON`](https://stellar.expert/explorer/testnet/contract/CDSM73ALYUJBNR4OK5YVR3AMWHBQCFG6BIB2RV22W7I3C6LPTAPAGDON)
+- Receipt contract: [`CAJ6XYN6…H4ST`](https://stellar.expert/explorer/testnet/contract/CAJ6XYN6VRAVPVL353X6QWZHKHOW4COWKQ5GPV5OL2ZXP2H2KFZMH4ST)
+- Native XLM SAC: [`CDLZFC3S…YSCC`](https://stellar.expert/explorer/testnet/contract/CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC) (testnet built-in)
+- Example tx: [`1dccbdb3…3b238`](https://stellar.expert/explorer/testnet/tx/1dccbdb309efb9bd510024024d77accb0ee4cbafbab1b322e4776b9146b3b238) (set_admin handover during deploy)
+
 ```text
 network:    Stellar Testnet
 passphrase: Test SDF Network ; September 2015
 contracts:
-  main         CDSM73ALYUJBNR4OK5YVR3AMWHBQCFG6BIB2RV22W7I3C6LPTAPAGDON  (campaign factory + escrow)
-  receipt      CAJ6XYN6VRAVPVL353X6QWZHKHOW4COWKQ5GPV5OL2ZXP2H2KFZMH4ST  (SEP-41 supporter badge, soulbound)
-  native xlm   CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC  (testnet SAC)
-demo:       <Vercel URL>
-video:      <Loom URL>
-example tx: https://stellar.expert/explorer/testnet/tx/1dccbdb309efb9bd510024024d77accb0ee4cbafbab1b322e4776b9146b3b238
+  main         CDSM73ALYUJBNR4OK5YVR3AMWHBQCFG6BIB2RV22W7I3C6LPTAPAGDON
+  receipt      CAJ6XYN6VRAVPVL353X6QWZHKHOW4COWKQ5GPV5OL2ZXP2H2KFZMH4ST
+  native xlm   CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC
 ```
 
-Both contract ids land in `.env.local` after running `scripts/deploy.sh alice`. The native XLM Stellar Asset Contract (SAC) is referenced by the main contract at construction time and is not redeployed by this project.
+Both deployed contract ids land in `.env.local` after running `scripts/deploy.sh alice`. The native XLM Stellar Asset Contract (SAC) is referenced by the main contract at construction time and is not redeployed by this project.
 
 ## Architecture
 
@@ -47,12 +55,12 @@ Both contract ids land in `.env.local` after running `scripts/deploy.sh alice`. 
                     +------------------------+
 ```
 
-1. `app/` — Next.js App Router entry, providers (React Query, wallet context), and editorial-styled hero / stats.
-2. `components/` — UI panels (campaign cards, create-campaign form, balance, badges, pledge wire).
-3. `hooks/` — React Query bindings to read campaigns, write actions (pledge / claim / refund / create), and stream events.
-4. `lib/stellar.ts`, `lib/soroban.ts`, `lib/wallets.ts`, `lib/events.ts`, `lib/errors.ts` — Stellar SDK adapters; explicit module list (no `defaultModules()`).
-5. `contract/main` — Soroban Rust crate; campaign factory + escrow + inter-contract mint.
-6. `contract/receipt` — Soroban Rust crate; SEP-41-style soulbound supporter badge (no `transfer` exposed).
+1. `app/`: Next.js App Router entry, providers (React Query, wallet context), editorial-styled hero and stats.
+2. `components/`: UI panels (campaign cards, create-campaign form, balance, badges, pledge wire).
+3. `hooks/`: React Query bindings to read campaigns, write actions (pledge / claim / refund / create), stream events.
+4. `lib/`: Stellar SDK adapters: `stellar.ts` (Horizon), `soroban.ts` (RPC + ScVal helpers), `wallets.ts` (explicit Stellar Wallets Kit modules, no `defaultModules()`), `events.ts` (`getEvents`), `errors.ts` (typed error mapper).
+5. `contract/main`: Soroban Rust crate. Campaign factory, escrow, inter-contract mint.
+6. `contract/receipt`: Soroban Rust crate. SEP-41-style soulbound supporter badge (no `transfer` exposed).
 
 ## State Model
 
@@ -183,31 +191,47 @@ Run with `cd contract && cargo test`.
 
 ## Build and Deploy
 
+Prerequisites:
+
+- Node 22+
+- Rust stable + Stellar CLI 25+ with the `wasm32v1-none` target installed (`rustup target add wasm32v1-none`)
+- A Stellar testnet wallet (Freighter, xBull, Lobstr, or Albedo)
+- A funded testnet account (Freighter has a one-click Friendbot button, or use `stellar keys generate alice --network testnet --fund`)
+
+First run against the already-deployed contracts:
+
 ```bash
-# install frontend dependencies
+git clone git@github.com:BobbyHello/Crowdfund.git folio
+cd folio
 npm install
-
-# unit tests for both contracts
-cd contract && cargo test && cd ..
-
-# deploy receipt + main + wire receipt admin to main, write ids into .env.local
-scripts/deploy.sh alice
-
-# local dev (port 3001 for the crowdfund slot in the fleet)
-PORT=3001 npm run dev
-
-# production build (next.js, gates CI)
-npm run build
+cp .env.example .env.local
+# .env.example already points at the deployed contract ids and testnet endpoints
+PORT=3001 npm run dev   # http://localhost:3001
 ```
 
-`scripts/deploy.sh`:
-- resolves the native XLM SAC id with `stellar contract id asset --asset native --network testnet`,
-- runs `stellar contract build` for both crates against `wasm32v1-none`,
-- deploys `receipt_token.wasm` with the deployer as placeholder admin,
-- deploys `main_contract.wasm` with `--receipt` and `--token`,
-- calls `set_admin` on the receipt to hand the mint role to the main contract.
+Run the gates:
 
-`alice` is a `stellar keys` identity; create one with `stellar keys generate alice --network testnet --fund` if it does not exist.
+```bash
+cd contract && cargo test && cd ..   # 14 contract tests
+npx tsc --noEmit                      # frontend typecheck
+npm run build                          # next.js production build
+```
+
+Deploy fresh contracts under your own admin key:
+
+```bash
+stellar keys generate alice --network testnet --fund   # if alice does not exist
+scripts/deploy.sh alice
+```
+
+What the script does:
+
+1. Resolves the native XLM SAC id with `stellar contract id asset --asset native --network testnet`.
+2. Runs `stellar contract build` for both crates against `wasm32v1-none`.
+3. Deploys `receipt_token.wasm` with the deployer as placeholder admin.
+4. Deploys `main_contract.wasm` with `--receipt` and `--token`.
+5. Calls `set_admin` on the receipt to hand the mint role to the main contract.
+6. Rewrites `NEXT_PUBLIC_MAIN_CONTRACT_ID` and `NEXT_PUBLIC_TOKEN_CONTRACT_ID` in `.env.local`.
 
 ## CI
 
@@ -222,3 +246,11 @@ npm run build
 | desktop hero + slate              | `docs/screenshot-desktop.png` |
 | mobile pledge flow                | `docs/screenshot-mobile.png`  |
 | cargo test output                 | `docs/screenshot-tests.png`   |
+
+## Notes
+
+- Amounts on chain are i128 stroops. The frontend converts via `xlmToStroops("1.5")` (in `lib/soroban.ts`) so there is no float drift on the boundary.
+- Escrow uses the native XLM SAC. `pledge` calls `token.transfer(backer, current_contract_address(), amount)`; `claim` and `refund` call `token.transfer(current_contract_address(), recipient, amount)`. The Soroban host auto-authorizes the contract as `from` when the contract itself is the invocation context, so no explicit `authorize_as_curr_contract` call is needed for the disbursement side.
+- Receipts are soulbound by design (no `transfer` method on the receipt contract) because they are proof of patronage, not a transferable asset.
+- The contract holds two failure ledger states: `Live` campaigns can transition to `Funded` (via `claim` after a met goal) but never to a `Refunded` status. Refunds are per-backer and zero out individual `Pledge(id, backer)` entries; the campaign as a whole stays `Live` after the deadline, so the UI derives "goal missed" from `now > deadline && pledged < goal`.
+- Wallet auth chain: `pledge` requires the backer to sign two auth entries in one prompt (the outer `pledge` call plus the inner native-XLM `transfer`). Soroban's `simulateTransaction` discovers both entries and the SDK threads them through `signTransaction`.
