@@ -26,13 +26,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const connect = useCallback(async () => {
-    ensureKit();
-    const { address } = await StellarWalletsKit.authModal();
-    setAddress(address);
+    try {
+      ensureKit();
+      const { address } = await StellarWalletsKit.authModal();
+      setAddress(address);
+    } catch (e) {
+      // dismissed modal, user-rejected, or wallet not installed -
+      // do not let it bubble to the runtime-error overlay
+      const msg =
+        e instanceof Error
+          ? e.message
+          : typeof e === "object" && e !== null && "message" in e
+            ? String((e as { message: unknown }).message)
+            : String(e);
+      console.warn("[wallet] connect cancelled:", msg);
+    }
   }, []);
 
   const disconnect = useCallback(async () => {
-    await StellarWalletsKit.disconnect();
+    try {
+      await StellarWalletsKit.disconnect();
+    } catch (e) {
+      console.warn("[wallet] disconnect error:", e);
+    }
     setAddress(null);
   }, []);
 

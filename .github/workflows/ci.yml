@@ -1,9 +1,13 @@
-name: ci
+name: folio ci
 
 on:
   push:
     branches: [main, master]
   pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   frontend:
@@ -15,7 +19,7 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
-      - run: npm ci
+      - run: npm install
       - run: npx tsc --noEmit
       - run: npm run build
 
@@ -28,6 +32,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: contract

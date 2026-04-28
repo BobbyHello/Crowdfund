@@ -111,8 +111,10 @@ function CampaignCard({ c, onActed }: { c: CampaignView; onActed: () => void }) 
 
   const isCreator = address && address === c.creator;
   const isBeneficiary = address && address === c.beneficiary;
-  const canClaim = isClosed && goalMet && !isFunded && (isCreator || isBeneficiary);
+  // beneficiary can claim as soon as the goal is met - no deadline gate
+  const canClaim = goalMet && !isFunded && (isCreator || isBeneficiary);
   const canRefund = isClosed && !goalMet && c.myPledge > 0n && !!address;
+  const remainingToGoal = c.goal > c.pledged ? c.goal - c.pledged : 0n;
 
   const pct = c.goal === 0n ? 0 : Number((c.pledged * 1000n) / c.goal) / 10;
   const pctClamped = Math.min(100, Math.max(0, pct));
@@ -228,7 +230,7 @@ function CampaignCard({ c, onActed }: { c: CampaignView; onActed: () => void }) 
           <p className="text-sm text-muted">Connect a wallet to pledge.</p>
         )}
 
-        {address && !isClosed && !isFunded && (
+        {address && !isClosed && !isFunded && !goalMet && (
           <form onSubmit={onPledge} className="flex flex-wrap items-center gap-3">
             <input
               type="number"
@@ -248,9 +250,16 @@ function CampaignCard({ c, onActed }: { c: CampaignView; onActed: () => void }) 
               {pledge.isPending ? "Pledging…" : "Pledge"}
             </button>
             <span className="text-[11px] text-subtle">
-              You receive 1 supporter badge per pledge.
+              Up to {stroopsToXlm(remainingToGoal)} XLM left to reach the goal.
             </span>
           </form>
+        )}
+
+        {address && goalMet && !isFunded && !canClaim && (
+          <p className="text-sm text-muted">
+            Goal met. Waiting for the beneficiary{" "}
+            <span className="font-mono">{shortAddr(c.beneficiary)}</span> to claim.
+          </p>
         )}
 
         {address && canClaim && (

@@ -24,6 +24,14 @@ contracts:
 
 Both deployed contract ids land in `.env.local` after running `scripts/deploy.sh alice`. The native XLM Stellar Asset Contract (SAC) is referenced by the main contract at construction time and is not redeployed by this project.
 
+## Features
+
+- **Real XLM escrow.** Pledges move actual XLM into the contract via the native Stellar Asset Contract; claim and refund route the same XLM out. Not just an accounting ledger.
+- **Soulbound supporter badges.** Each pledge mints a non-transferable SEP-41 token (no `transfer` method), so backers carry an on-chain receipt that can't be flipped.
+- **Auto-refund branch.** If the deadline passes without hitting the goal, every backer can pull their own pledge out independently. No central authority required.
+- **Inter-contract auth chain.** Pledge signs both the outer call and the inner SAC transfer in a single wallet prompt; Soroban's `simulateTransaction` discovers both auth entries automatically.
+- **Editorial UI.** Magazine-style serif headings + asymmetric grid; the campaign list reads like a publication slate.
+
 ## Architecture
 
 ```text
@@ -102,7 +110,7 @@ Pledge (the core flow):
 Claim (after deadline, goal met):
 
 1. Beneficiary or creator calls `claim(campaign_id)`.
-2. Contract checks `now >= deadline && pledged >= goal && status == Live`.
+2. Contract checks `pledged >= goal && status == Live`. **No deadline gate** - if the goal was hit early, the beneficiary can claim immediately. If the goal isn't met by the deadline, refund applies instead and `claim` returns `GoalNotMet`.
 3. Contract calls `token.transfer(self, beneficiary, pledged)`.
 4. `Campaign(id).status = Funded`.
 5. Event: `(symbol "funded", campaign_id) -> i128 payout`.
@@ -123,8 +131,8 @@ Main contract (`contract/main/src/lib.rs`):
 |----------------------------------------------------------------|---------------------------------------------------|------------------------------------------------------------------------|
 | `__constructor(receipt, token)`                                 | Wire the receipt and native XLM SAC               | -                                                                      |
 | `create_campaign(creator, beneficiary, title, goal, deadline)`  | Open a new campaign, returns u32 id               | `TitleEmpty`, `GoalMustBePositive`, `DeadlineInPast`                  |
-| `pledge(backer, campaign_id, amount)`                           | Escrow XLM, mint badge, record pledge             | `AmountMustBePositive`, `UnknownCampaign`, `CampaignClosed`, `NotInitialized` |
-| `claim(campaign_id)`                                            | Pay escrow to beneficiary                         | `UnknownCampaign`, `AlreadyClaimed`, `DeadlineNotReached`, `GoalNotMet` |
+| `pledge(backer, campaign_id, amount)`                           | Escrow XLM, mint badge, record pledge. Rejected if goal already met or this pledge would overshoot the goal. | `AmountMustBePositive`, `UnknownCampaign`, `CampaignClosed`, `PledgeExceedsRemaining`, `NotInitialized` |
+| `claim(campaign_id)`                                            | Pay escrow to beneficiary. Allowed as soon as `pledged >= goal`, no deadline gate. | `UnknownCampaign`, `AlreadyClaimed`, `GoalNotMet` |
 | `refund(backer, campaign_id)`                                   | Return backer's pledge                            | `UnknownCampaign`, `GoalAlreadyMet`, `DeadlineNotReached`, `NoPledgeFound` |
 | `campaign(id)`                                                  | Read campaign struct                              | `UnknownCampaign`                                                     |
 | `pledged_by(id, backer)`                                        | Read backer's pledge amount (0 if none)           | -                                                                      |
@@ -158,13 +166,14 @@ Contract error variants (typed `Result`, no panics on user input):
 | `DeadlineInPast`        | `create_campaign` with deadline <= now       |
 | `AmountMustBePositive`  | `pledge` with non-positive amount            |
 | `UnknownCampaign`       | any read/write against a missing id          |
-| `CampaignClosed`        | `pledge` after deadline or on a Funded campaign |
-| `DeadlineNotReached`    | `claim` or `refund` before the deadline      |
+| `CampaignClosed`        | `pledge` after deadline, on a Funded campaign, or when the goal is already met |
+| `DeadlineNotReached`    | `refund` before the deadline                 |
 | `GoalNotMet`            | `claim` when pledged < goal                  |
 | `GoalAlreadyMet`        | `refund` when goal was met                   |
 | `AlreadyClaimed`        | `claim` after status flipped to Funded       |
 | `NoPledgeFound`         | `refund` when backer has nothing to recover  |
 | `TitleEmpty`            | `create_campaign` with empty title           |
+| `PledgeExceedsRemaining`| `pledge` whose amount would push the total past the goal |
 
 Frontend typed errors (`lib/errors.ts`): `WalletNotFoundError`, `UserRejectedError`, `InsufficientBalanceError`, plus a `toError` mapper that classifies SDK / wallet messages into one of the three.
 
@@ -175,8 +184,11 @@ Run with `cd contract && cargo test`.
 | test                                       | covers                                                          | contract |
 |--------------------------------------------|-----------------------------------------------------------------|----------|
 | `pledge_increases_total_and_mints_badge`   | Pledge updates totals, escrow moves XLM, mints 1 badge          | main     |
-| `multiple_pledges_accumulate`              | Multi-backer accumulation; correct backer count and badge count | main     |
-| `claim_pays_beneficiary_when_goal_met`     | Escrow released to beneficiary, status flips to Funded          | main     |
+| `multiple_pledges_accumulate`              | Multi-backer accumulation up to the goal exactly                 | main     |
+| `claim_pays_beneficiary_when_goal_met`     | Escrow released to beneficiary as soon as goal hits, no deadline gate | main |
+| `cannot_pledge_when_goal_already_met`      | Goal-met campaign rejects further pledges with `CampaignClosed` | main     |
+| `pledge_that_overshoots_goal_is_rejected`  | A pledge that would push past the goal returns `PledgeExceedsRemaining` | main |
+| `claim_blocked_when_goal_not_met`          | Even after deadline, `claim` returns `GoalNotMet`                | main     |
 | `refund_returns_pledge_when_goal_missed`   | Backer reclaims pledge; further refund returns `NoPledgeFound`  | main     |
 | `cannot_pledge_after_deadline`             | `CampaignClosed` typed error path                                | main     |
 | `unknown_campaign_returns_error`           | Baseline read on an absent campaign                              | main     |
@@ -233,11 +245,20 @@ What the script does:
 5. Calls `set_admin` on the receipt to hand the mint role to the main contract.
 6. Rewrites `NEXT_PUBLIC_MAIN_CONTRACT_ID` and `NEXT_PUBLIC_TOKEN_CONTRACT_ID` in `.env.local`.
 
-## CI
+## CI / CD
 
 `.github/workflows/ci.yml` runs two jobs on every push and pull request to `main`:
-- `frontend`: `npm ci` + `npx tsc --noEmit` + `npm run build`.
+- `frontend`: `npm install` + `npx tsc --noEmit` + `npm run build`.
 - `contract`: `cargo test` against `contract/` with `Swatinem/rust-cache` for the workspace.
+
+Concurrency is set to cancel-in-progress, so a follow-up commit on the same ref kills the older run instead of queueing.
+
+**Deploy is split between automated and manual:**
+
+- **Frontend** auto-deploys to Vercel on every push to `main`. Vercel reads `vercel.json` for the framework + build command. Connect the repo on vercel.com once and pushes flow through.
+- **Contract** is deployed manually via `scripts/deploy.sh` so a Stellar signing key never lives in CI secrets.
+
+Full step-by-step in [`DEPLOYMENT.md`](./DEPLOYMENT.md).
 
 ## Screenshots
 
@@ -252,5 +273,6 @@ What the script does:
 - Amounts on chain are i128 stroops. The frontend converts via `xlmToStroops("1.5")` (in `lib/soroban.ts`) so there is no float drift on the boundary.
 - Escrow uses the native XLM SAC. `pledge` calls `token.transfer(backer, current_contract_address(), amount)`; `claim` and `refund` call `token.transfer(current_contract_address(), recipient, amount)`. The Soroban host auto-authorizes the contract as `from` when the contract itself is the invocation context, so no explicit `authorize_as_curr_contract` call is needed for the disbursement side.
 - Receipts are soulbound by design (no `transfer` method on the receipt contract) because they are proof of patronage, not a transferable asset.
-- The contract holds two failure ledger states: `Live` campaigns can transition to `Funded` (via `claim` after a met goal) but never to a `Refunded` status. Refunds are per-backer and zero out individual `Pledge(id, backer)` entries; the campaign as a whole stays `Live` after the deadline, so the UI derives "goal missed" from `now > deadline && pledged < goal`.
+- **Goal-met closes the campaign to new pledges.** The contract is a hard-cap crowdfund: as soon as `pledged >= goal`, further pledges return `CampaignClosed`, and a pledge that would overshoot returns `PledgeExceedsRemaining` (the UI can compute the max allowed as `goal - pledged`). Once the goal is met, the beneficiary can call `claim` immediately - no deadline gate.
+- The contract has two ledger states: `Live` and `Funded`. `Live` campaigns transition to `Funded` only via `claim` after the goal is met. Refunds happen per-backer (zeroing individual `Pledge(id, backer)` entries) and the campaign as a whole stays `Live`, so the UI derives "goal missed" from `now > deadline && pledged < goal && status == Live`.
 - Wallet auth chain: `pledge` requires the backer to sign two auth entries in one prompt (the outer `pledge` call plus the inner native-XLM `transfer`). Soroban's `simulateTransaction` discovers both entries and the SDK threads them through `signTransaction`.

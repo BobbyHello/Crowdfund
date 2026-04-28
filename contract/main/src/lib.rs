@@ -21,6 +21,7 @@ pub enum Error {
     AlreadyClaimed = 10,
     NoPledgeFound = 11,
     TitleEmpty = 12,
+    PledgeExceedsRemaining = 13,
 }
 
 #[contracttype]
@@ -132,6 +133,13 @@ impl MainContract {
         if env.ledger().timestamp() >= c.deadline {
             return Err(Error::CampaignClosed);
         }
+        // goal-met = closed to new pledges. last pledge cannot overshoot goal.
+        if c.pledged >= c.goal {
+            return Err(Error::CampaignClosed);
+        }
+        if c.pledged + amount > c.goal {
+            return Err(Error::PledgeExceedsRemaining);
+        }
 
         // pull XLM into escrow
         let token_addr: Address = env
@@ -177,9 +185,9 @@ impl MainContract {
         if c.status == Status::Funded {
             return Err(Error::AlreadyClaimed);
         }
-        if env.ledger().timestamp() < c.deadline {
-            return Err(Error::DeadlineNotReached);
-        }
+        // beneficiary can claim as soon as the goal is met -
+        // no need to wait for the deadline. if the goal isn't met
+        // by the deadline, refund applies instead.
         if c.pledged < c.goal {
             return Err(Error::GoalNotMet);
         }

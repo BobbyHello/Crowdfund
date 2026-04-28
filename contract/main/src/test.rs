@@ -109,17 +109,70 @@ fn claim_pays_beneficiary_when_goal_met() {
     fund(&ctx, &backer, 100_000_000);
 
     let id = open_campaign(&ctx, &creator, &beneficiary, 50_000_000, 2_000);
-    ctx.main.pledge(&backer, &id, &60_000_000);
+    // pledge exactly to the goal - last accepted pledge that fills the bucket
+    ctx.main.pledge(&backer, &id, &50_000_000);
 
-    ctx.env.ledger().with_mut(|l| l.timestamp = 3_000);
+    // beneficiary can claim immediately, no need to wait for deadline
     ctx.main.claim(&id);
 
-    assert_eq!(ctx.token.balance(&beneficiary), 60_000_000);
+    assert_eq!(ctx.token.balance(&beneficiary), 50_000_000);
     let c = ctx.main.campaign(&id);
     assert!(matches!(c.status, Status::Funded));
 
     let second = ctx.main.try_claim(&id);
     assert!(matches!(second, Err(Ok(Error::AlreadyClaimed))));
+}
+
+#[test]
+fn cannot_pledge_when_goal_already_met() {
+    let ctx = setup();
+    let creator = Address::generate(&ctx.env);
+    let alice = Address::generate(&ctx.env);
+    let bob = Address::generate(&ctx.env);
+    fund(&ctx, &alice, 100_000_000);
+    fund(&ctx, &bob, 100_000_000);
+
+    let id = open_campaign(&ctx, &creator, &creator, 50_000_000, 2_000);
+    // alice fills the goal exactly
+    ctx.main.pledge(&alice, &id, &50_000_000);
+
+    // bob tries to pledge after goal is full - rejected
+    let r = ctx.main.try_pledge(&bob, &id, &10_000_000);
+    assert!(matches!(r, Err(Ok(Error::CampaignClosed))));
+}
+
+#[test]
+fn pledge_that_overshoots_goal_is_rejected() {
+    let ctx = setup();
+    let creator = Address::generate(&ctx.env);
+    let backer = Address::generate(&ctx.env);
+    fund(&ctx, &backer, 100_000_000);
+
+    let id = open_campaign(&ctx, &creator, &creator, 50_000_000, 2_000);
+    // tries to pledge more than the goal in one shot
+    let r = ctx.main.try_pledge(&backer, &id, &60_000_000);
+    assert!(matches!(r, Err(Ok(Error::PledgeExceedsRemaining))));
+
+    // partial pledge then a second pledge that would push past the goal
+    ctx.main.pledge(&backer, &id, &30_000_000);
+    let r2 = ctx.main.try_pledge(&backer, &id, &25_000_000);
+    assert!(matches!(r2, Err(Ok(Error::PledgeExceedsRemaining))));
+}
+
+#[test]
+fn claim_blocked_when_goal_not_met() {
+    let ctx = setup();
+    let creator = Address::generate(&ctx.env);
+    let backer = Address::generate(&ctx.env);
+    fund(&ctx, &backer, 100_000_000);
+
+    let id = open_campaign(&ctx, &creator, &creator, 50_000_000, 2_000);
+    ctx.main.pledge(&backer, &id, &30_000_000);
+
+    // even after deadline, claim fails because goal wasn't met
+    ctx.env.ledger().with_mut(|l| l.timestamp = 3_000);
+    let r = ctx.main.try_claim(&id);
+    assert!(matches!(r, Err(Ok(Error::GoalNotMet))));
 }
 
 #[test]
@@ -175,7 +228,7 @@ fn refund_blocked_when_goal_was_met() {
     fund(&ctx, &backer, 100_000_000);
 
     let id = open_campaign(&ctx, &creator, &creator, 50_000_000, 2_000);
-    ctx.main.pledge(&backer, &id, &60_000_000);
+    ctx.main.pledge(&backer, &id, &50_000_000);
 
     ctx.env.ledger().with_mut(|l| l.timestamp = 3_000);
     let r = ctx.main.try_refund(&backer, &id);
