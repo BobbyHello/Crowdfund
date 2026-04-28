@@ -101,27 +101,31 @@ function CampaignCard({ c, onActed }: { c: CampaignView; onActed: () => void }) 
   const isClosed = remaining.closed;
   const goalMet = c.pledged >= c.goal;
   const isFunded = c.status === "Funded";
-  const stampKind: "live" | "funded" | "missed" | "refunding" = isFunded
+
+  const isCreator = address && address === c.creator;
+  const isBeneficiary = address && address === c.beneficiary;
+
+  const pledge = usePledge(address);
+  const claim = useClaim(address);
+  const refund = useRefund(address);
+
+  // treat an in-flight successful claim as Funded so the UI flips immediately,
+  // before the campaigns query refetches the contract state.
+  const claimedNow = isFunded || claim.isSuccess;
+  const stampKind: "live" | "funded" | "missed" | "refunding" = claimedNow
     ? "funded"
     : !isClosed
       ? "live"
       : goalMet
         ? "live"
         : "missed";
-
-  const isCreator = address && address === c.creator;
-  const isBeneficiary = address && address === c.beneficiary;
   // beneficiary can claim as soon as the goal is met - no deadline gate
-  const canClaim = goalMet && !isFunded && (isCreator || isBeneficiary);
+  const canClaim = goalMet && !claimedNow && (isCreator || isBeneficiary);
   const canRefund = isClosed && !goalMet && c.myPledge > 0n && !!address;
   const remainingToGoal = c.goal > c.pledged ? c.goal - c.pledged : 0n;
 
   const pct = c.goal === 0n ? 0 : Number((c.pledged * 1000n) / c.goal) / 10;
   const pctClamped = Math.min(100, Math.max(0, pct));
-
-  const pledge = usePledge(address);
-  const claim = useClaim(address);
-  const refund = useRefund(address);
 
   const [amount, setAmount] = useState("");
   const [showSuccess, setShowSuccess] = useState<string | null>(null);
@@ -136,6 +140,7 @@ function CampaignCard({ c, onActed }: { c: CampaignView; onActed: () => void }) 
   async function onPledge(e: FormEvent) {
     e.preventDefault();
     if (!address) return;
+    setShowSuccess(null);
     try {
       const r = await pledge.mutateAsync({ campaignId: c.id, amount });
       setAmount("");
@@ -147,6 +152,7 @@ function CampaignCard({ c, onActed }: { c: CampaignView; onActed: () => void }) 
   }
 
   async function onClaim() {
+    setShowSuccess(null);
     try {
       const r = await claim.mutateAsync(c.id);
       setShowSuccess(r.contractHash);
@@ -157,6 +163,7 @@ function CampaignCard({ c, onActed }: { c: CampaignView; onActed: () => void }) 
   }
 
   async function onRefund() {
+    setShowSuccess(null);
     try {
       const r = await refund.mutateAsync(c.id);
       setShowSuccess(r.contractHash);
@@ -255,7 +262,7 @@ function CampaignCard({ c, onActed }: { c: CampaignView; onActed: () => void }) 
           </form>
         )}
 
-        {address && goalMet && !isFunded && !canClaim && (
+        {address && goalMet && !claimedNow && !canClaim && (
           <p className="text-sm text-muted">
             Goal met. Waiting for the beneficiary{" "}
             <span className="font-mono">{shortAddr(c.beneficiary)}</span> to claim.
@@ -272,6 +279,15 @@ function CampaignCard({ c, onActed }: { c: CampaignView; onActed: () => void }) 
           </button>
         )}
 
+        {claimedNow && (
+          <button
+            disabled
+            className="cursor-default rounded-sm border border-success/40 px-4 py-2 text-xs font-medium uppercase tracking-[0.14em] text-[var(--color-success)]"
+          >
+            Claimed
+          </button>
+        )}
+
         {address && canRefund && (
           <button
             onClick={onRefund}
@@ -282,16 +298,9 @@ function CampaignCard({ c, onActed }: { c: CampaignView; onActed: () => void }) 
           </button>
         )}
 
-        {address && isClosed && !goalMet && c.myPledge === 0n && !isFunded && (
+        {address && isClosed && !goalMet && c.myPledge === 0n && !claimedNow && (
           <p className="text-sm text-muted">
             This campaign closed below its goal. Backers can refund their pledges.
-          </p>
-        )}
-
-        {isFunded && (
-          <p className="text-sm text-muted">
-            Funded. Beneficiary <span className="font-mono">{shortAddr(c.beneficiary)}</span> claimed
-            the escrow.
           </p>
         )}
 

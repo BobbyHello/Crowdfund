@@ -9,19 +9,19 @@ Goal-based crowdfunding dApp. Backers pledge XLM into a Soroban escrow contract.
 
 [![CI](https://github.com/BobbyHello/Crowdfund/actions/workflows/ci.yml/badge.svg)](https://github.com/BobbyHello/Crowdfund/actions/workflows/ci.yml)
 
-- Live: `<Vercel URL>`
-- Demo video: `<Loom URL>`
-- Main contract: [`CDSM73AL…GDON`](https://stellar.expert/explorer/testnet/contract/CDSM73ALYUJBNR4OK5YVR3AMWHBQCFG6BIB2RV22W7I3C6LPTAPAGDON)
-- Receipt contract: [`CAJ6XYN6…H4ST`](https://stellar.expert/explorer/testnet/contract/CAJ6XYN6VRAVPVL353X6QWZHKHOW4COWKQ5GPV5OL2ZXP2H2KFZMH4ST)
+- Live: https://crowdfund-peach-six.vercel.app/
+- Demo video: https://drive.google.com/drive/folders/14mA3a16JIJWZvIULTul2-4js85Hkefod?hl=vi
+- Main contract: [`CDJCLXEB…R7VF`](https://stellar.expert/explorer/testnet/contract/CDJCLXEBQEVEEBKG2KL3LEWKTU4B6SBP7QL67T3Z5MIYO4NCL6SXR7VF)
+- Receipt contract: [`CCTTAXBN…OGGE`](https://stellar.expert/explorer/testnet/contract/CCTTAXBNP4OWTFH2WIOK6MAFFLR76DBB4VUAMXHXKTHHBUFWUVGYOGGE)
 - Native XLM SAC: [`CDLZFC3S…YSCC`](https://stellar.expert/explorer/testnet/contract/CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC) (testnet built-in)
-- Example tx: [`1dccbdb3…3b238`](https://stellar.expert/explorer/testnet/tx/1dccbdb309efb9bd510024024d77accb0ee4cbafbab1b322e4776b9146b3b238) (set_admin handover during deploy)
+- Example tx: [`06b08352…d3dd`](https://stellar.expert/explorer/testnet/tx/06b08352ad1b05c5f4ed7aedb1f85840dd837adb455b79445823d0c08507d3dd) (set_admin handover during deploy)
 
 ```text
 network:    Stellar Testnet
 passphrase: Test SDF Network ; September 2015
 contracts:
-  main         CDSM73ALYUJBNR4OK5YVR3AMWHBQCFG6BIB2RV22W7I3C6LPTAPAGDON
-  receipt      CAJ6XYN6VRAVPVL353X6QWZHKHOW4COWKQ5GPV5OL2ZXP2H2KFZMH4ST
+  main         CDJCLXEBQEVEEBKG2KL3LEWKTU4B6SBP7QL67T3Z5MIYO4NCL6SXR7VF
+  receipt      CCTTAXBNP4OWTFH2WIOK6MAFFLR76DBB4VUAMXHXKTHHBUFWUVGYOGGE
   native xlm   CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC
 ```
 
@@ -227,7 +227,7 @@ PORT=3001 npm run dev   # http://localhost:3001
 Run the gates:
 
 ```bash
-cd contract && cargo test && cd ..   # 14 contract tests
+cd contract && cargo test && cd ..   # 17 contract tests
 npx tsc --noEmit                      # frontend typecheck
 npm run build                          # next.js production build
 ```
@@ -269,8 +269,7 @@ Full step-by-step in [`DEPLOYMENT.md`](./DEPLOYMENT.md).
 |-----------------------------------|------------------------|
 | desktop hero + slate | <img width="1085" height="698" alt="image" src="https://github.com/user-attachments/assets/1e4ecae7-cb5e-4982-a858-c93095397450" /> |
 | mobile pledge flow | <p align="center"><img src="https://github.com/user-attachments/assets/bf4a47a4-8dbf-421b-8ec7-008071690dfa" width="45%" alt="image" /> &nbsp;&nbsp;&nbsp;&nbsp; <img src="https://github.com/user-attachments/assets/fd8e85c0-223c-4542-8f5d-f9cfed398faa" width="45%" alt="image" /></p> |
-| cargo test output | <img width="684" height="487" alt="image" src="https://github.com/user-attachments/assets/54aad8b0-3248-4bf7-bbe9-9185c3a4bc6d" />
- |
+| cargo test output | <img width="684" height="487" alt="image" src="https://github.com/user-attachments/assets/54aad8b0-3248-4bf7-bbe9-9185c3a4bc6d" /> |
 
 ## Notes
 
