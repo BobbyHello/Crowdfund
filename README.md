@@ -3,6 +3,9 @@
 Crowdfund: factory + escrow + soulbound supporter badge on Stellar testnet.
 
 Goal-based crowdfunding dApp. Backers pledge XLM into a Soroban escrow contract. After the deadline, the beneficiary claims the pot if the goal closed; otherwise every backer can pull their pledge back. Each pledge mints a soulbound SEP-41 supporter badge through an inter-contract call. Live event feed is polled from Soroban RPC.
+<img width="1427" height="807" alt="image" src="https://github.com/user-attachments/assets/90a8964a-d22e-40a0-88a6-e9616737385a" />
+
+
 
 [![CI](https://github.com/BobbyHello/Crowdfund/actions/workflows/ci.yml/badge.svg)](https://github.com/BobbyHello/Crowdfund/actions/workflows/ci.yml)
 
@@ -264,9 +267,10 @@ Full step-by-step in [`DEPLOYMENT.md`](./DEPLOYMENT.md).
 
 | view                              | preview                |
 |-----------------------------------|------------------------|
-| desktop hero + slate              | `docs/screenshot-desktop.png` |
-| mobile pledge flow                | `docs/screenshot-mobile.png`  |
-| cargo test output                 | `docs/screenshot-tests.png`   |
+| desktop hero + slate | <img width="1085" height="698" alt="image" src="https://github.com/user-attachments/assets/1e4ecae7-cb5e-4982-a858-c93095397450" /> |
+| mobile pledge flow | <p align="center"><img src="https://github.com/user-attachments/assets/bf4a47a4-8dbf-421b-8ec7-008071690dfa" width="45%" alt="image" /> &nbsp;&nbsp;&nbsp;&nbsp; <img src="https://github.com/user-attachments/assets/fd8e85c0-223c-4542-8f5d-f9cfed398faa" width="45%" alt="image" /></p> |
+| cargo test output | <img width="684" height="487" alt="image" src="https://github.com/user-attachments/assets/54aad8b0-3248-4bf7-bbe9-9185c3a4bc6d" />
+ |
 
 ## Notes
 
